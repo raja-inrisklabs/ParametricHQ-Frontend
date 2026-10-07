@@ -26,6 +26,69 @@
   }
 }
 
+.fetch-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.fetch-top,
+.fetch-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  align-items: stretch;
+}
+
+.fetch-actions {
+  margin-top: 16px;
+}
+
+.fetch-button {
+  width: 100%;
+  height: 44px;
+}
+
+.area-row {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.area-row input {
+  padding: 8px 8px;
+  font-size: 13px;
+}
+
+.variable-panel {
+  max-height: 220px;
+  overflow: auto;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 12px;
+  padding-right: 4px;
+}
+
+.variable-panel label {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  font-size: 12px;
+  color: #334155;
+  cursor: pointer;
+}
+
+@media (max-width: 800px) {
+  .fetch-top,
+  .fetch-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .area-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 input[type="date"]::-webkit-calendar-picker-indicator {
   opacity: 0.5;
   cursor: pointer;

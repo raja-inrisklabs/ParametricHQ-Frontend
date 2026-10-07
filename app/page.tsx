@@ -30,7 +30,22 @@ export default function Home() {
                 letterSpacing: "0.06em",
               }}
             >
-              ERA5 & ERA5-Land
+              ERA5-Land
+            </span>
+            <span
+              style={{
+                fontSize: 11,
+                fontWeight: 600,
+                color: "#0f766e",
+                background: "#f0fdfa",
+                border: "1px solid #99f6e4",
+                borderRadius: 20,
+                padding: "3px 10px",
+                textTransform: "uppercase",
+                letterSpacing: "0.06em",
+              }}
+            >
+              ERA5 single levels
             </span>
             <span
               style={{
@@ -57,11 +72,11 @@ export default function Home() {
               lineHeight: 1.25,
             }}
           >
-            Climate Data Explorer
+            Fetch hourly ERA5 data
           </h1>
-          <p style={{ fontSize: 15, color: "#64748b", margin: 0, maxWidth: 600, lineHeight: 1.6 }}>
-            Request ERA5-Land data from Copernicus CDS through the backend.
-            Choose variables, a location, and a date range, then fetch the dataset.
+          <p style={{ fontSize: 15, color: "#64748b", margin: 0, maxWidth: 640, lineHeight: 1.6 }}>
+            Choose ERA5-Land or ERA5 single levels, then a box or a point, the variables, and the dates.
+            Each dataset keeps its own variables and its own stored file.
           </p>
         </div>
 

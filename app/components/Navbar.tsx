@@ -53,7 +53,7 @@ export default function Navbar() {
           </div>
           <div>
             <div style={{ fontWeight: 700, fontSize: 15, color: "#0f172a", lineHeight: 1.2 }}>
-              Parametric Platform
+              ParametricHQ
             </div>
             <div style={{ fontSize: 11, color: "#64748b", lineHeight: 1.2, fontWeight: 400 }}>
               ERA5 Climate Data

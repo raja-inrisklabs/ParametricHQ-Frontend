@@ -1,5 +1,13 @@
 node_modules/
 .next/
 out/
+*.tsbuildinfo
+
+# Secrets. Keep .env.example.
 .env
 .env*.local
+
+# Local downloads and generated data, if placed next to the app.
+raw_data/
+csv_data/
+storage/
