@@ -55,6 +55,26 @@
   gap: 8px;
 }
 
+.point-map {
+  height: 320px;
+  width: 100%;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  z-index: 0;
+}
+
+.map-placeholder {
+  height: 180px;
+  border: 1px dashed #94a3b8;
+  border-radius: 8px;
+  background: #f8fafc;
+  color: #64748b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+}
+
 .area-row input {
   padding: 8px 8px;
   font-size: 13px;

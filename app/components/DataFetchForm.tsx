@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
 import { card, label, input, select, primaryBtn, badge, sectionTitle, statBox } from "./styles";
 
@@ -30,6 +31,11 @@ type ApiResponse = {
   file_size_bytes?: number;
   parameters?: string[];
 };
+
+const PointMap = dynamic(() => import("./PointMap"), {
+  ssr: false,
+  loading: () => <div className="map-placeholder">Loading street map…</div>,
+});
 
 const DEFAULT_AREA = { north: "20", west: "10", south: "10", east: "20" };
 const DEFAULT_POINT = { latitude: "23.0225", longitude: "72.5714" };
@@ -66,7 +72,7 @@ export default function DataFetchForm() {
   const [west, setWest] = useState(DEFAULT_AREA.west);
   const [south, setSouth] = useState(DEFAULT_AREA.south);
   const [east, setEast] = useState(DEFAULT_AREA.east);
-  const [locationMode, setLocationMode] = useState<"area" | "point">("area");
+  const [locationMode, setLocationMode] = useState<"area" | "point" | "map">("area");
   const [latitude, setLatitude] = useState(DEFAULT_POINT.latitude);
   const [longitude, setLongitude] = useState(DEFAULT_POINT.longitude);
   const [loading, setLoading] = useState(false);
@@ -101,7 +107,7 @@ export default function DataFetchForm() {
   }, [datasetId]);
 
   function locationError(): string | null {
-    if (locationMode === "point") {
+    if (locationMode === "point" || locationMode === "map") {
       const lat = Number(latitude);
       const lon = Number(longitude);
       if (Number.isNaN(lat) || Number.isNaN(lon)) return "Latitude and longitude must be numbers.";
@@ -170,19 +176,19 @@ export default function DataFetchForm() {
         body: JSON.stringify({
           provider_id: selected?.provider_id || "era5",
           dataset_id: datasetId,
-          location: locationMode === "point" ? `${latitude},${longitude}` : `n${north}_w${west}_s${south}_e${east}`,
+          location: locationMode === "area" ? `n${north}_w${west}_s${south}_e${east}` : `${latitude},${longitude}`,
           start_date: startDate,
           end_date: endDate,
           parameters: selectedVariables,
           temporal_resolution: "hourly",
-          ...(locationMode === "point"
-            ? { latitude: Number(latitude), longitude: Number(longitude) }
-            : {
+          ...(locationMode === "area"
+            ? {
                 north: Number(north),
                 west: Number(west),
                 south: Number(south),
                 east: Number(east),
-              }),
+              }
+            : { latitude: Number(latitude), longitude: Number(longitude) }),
         }),
       });
       const body: ApiResponse = await res.json().catch(() => ({ status: "failed", detail: res.statusText }));
@@ -295,6 +301,15 @@ export default function DataFetchForm() {
                 />
                 Latitude / longitude
               </label>
+              <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
+                <input
+                  type="radio"
+                  name="location-mode"
+                  checked={locationMode === "map"}
+                  onChange={() => setLocationMode("map")}
+                />
+                Map
+              </label>
             </div>
             {locationMode === "area" ? (
               <>
@@ -321,6 +336,23 @@ export default function DataFetchForm() {
                   <input type="number" step="0.1" value={west} onChange={(e) => setWest(e.target.value)} style={input} />
                 </div>
               </div>
+              </>
+            ) : locationMode === "map" ? (
+              <>
+                <p style={{ margin: "0 0 12px", fontSize: 12, color: "#64748b", lineHeight: 1.5 }}>
+                  Choose a point on the map. The selected latitude and longitude are sent as a single cell.
+                </p>
+                <PointMap
+                  latitude={Number(latitude) || Number(DEFAULT_POINT.latitude)}
+                  longitude={Number(longitude) || Number(DEFAULT_POINT.longitude)}
+                  onSelect={(lat, lon) => {
+                    setLatitude(lat.toFixed(4));
+                    setLongitude(lon.toFixed(4));
+                  }}
+                />
+                <p style={{ margin: "10px 0 0", fontSize: 12, color: "#334155" }}>
+                  Selected point: {latitude || "—"}, {longitude || "—"}. Click the map to move it. Use the + and − controls or the scroll wheel to zoom.
+                </p>
               </>
             ) : (
               <>
