@@ -40,6 +40,13 @@
   align-items: stretch;
 }
 
+.dataset-head {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  align-items: start;
+}
+
 .fetch-actions {
   margin-top: 16px;
 }
@@ -81,7 +88,7 @@
 }
 
 .variable-panel {
-  max-height: 220px;
+  max-height: 160px;
   overflow: auto;
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -100,7 +107,8 @@
 
 @media (max-width: 800px) {
   .fetch-top,
-  .fetch-actions {
+  .fetch-actions,
+  .dataset-head {
     grid-template-columns: 1fr;
   }
 

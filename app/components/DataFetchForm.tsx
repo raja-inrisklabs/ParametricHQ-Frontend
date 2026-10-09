@@ -37,6 +37,11 @@ const PointMap = dynamic(() => import("./PointMap"), {
   loading: () => <div className="map-placeholder">Loading street map…</div>,
 });
 
+const AreaMap = dynamic(() => import("./AreaMap"), {
+  ssr: false,
+  loading: () => <div className="map-placeholder">Loading street map…</div>,
+});
+
 const DEFAULT_AREA = { north: "20", west: "10", south: "10", east: "20" };
 const DEFAULT_POINT = { latitude: "23.0225", longitude: "72.5714" };
 
@@ -72,7 +77,7 @@ export default function DataFetchForm() {
   const [west, setWest] = useState(DEFAULT_AREA.west);
   const [south, setSouth] = useState(DEFAULT_AREA.south);
   const [east, setEast] = useState(DEFAULT_AREA.east);
-  const [locationMode, setLocationMode] = useState<"area" | "point" | "map">("area");
+  const [locationMode, setLocationMode] = useState<"area" | "point" | "map">("map");
   const [latitude, setLatitude] = useState(DEFAULT_POINT.latitude);
   const [longitude, setLongitude] = useState(DEFAULT_POINT.longitude);
   const [loading, setLoading] = useState(false);
@@ -81,6 +86,7 @@ export default function DataFetchForm() {
   const [error, setError] = useState<string | null>(null);
   const [preview, setPreview] = useState<Record<string, unknown>[] | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
+  const [variableMessage, setVariableMessage] = useState<string | null>(null);
 
   const selected = datasets.find((item) => item.id === datasetId) ?? datasets[0];
 
@@ -97,13 +103,25 @@ export default function DataFetchForm() {
   }, []);
 
   useEffect(() => {
+    let active = true;
+    setVariableMessage("Loading variables…");
     fetch(`/api/v1/datasets/catalog/${datasetId}/variables`)
-      .then((res) => (res.ok ? res.json() : Promise.reject()))
+      .then((res) => (res.ok ? res.json() : Promise.reject(new Error(`Variables request failed (${res.status}).`))))
       .then((rows: CatalogVariable[]) => {
+        if (!active) return;
         setVariables(rows);
         setSelectedVariables(rows.slice(0, 2).map((item) => item.name));
+        setVariableMessage(rows.length === 0 ? "This dataset has no variables." : null);
       })
-      .catch(() => undefined);
+      .catch(() => {
+        if (!active) return;
+        setVariables([]);
+        setSelectedVariables([]);
+        setVariableMessage("Variables could not be loaded. Start the API on port 8000 and refresh.");
+      });
+    return () => {
+      active = false;
+    };
   }, [datasetId]);
 
   function locationError(): string | null {
@@ -261,26 +279,6 @@ export default function DataFetchForm() {
       <div>
         <div className="fetch-top">
           <div style={card}>
-            <div style={sectionTitle}>Dataset</div>
-            <div style={label}>
-              <span>Dataset</span>
-              <select value={datasetId} onChange={(e) => setDatasetId(e.target.value)} style={select}>
-                {datasets.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            {selected && (
-              <p style={{ margin: "12px 0 0", fontSize: 13, color: "#64748b", lineHeight: 1.5 }}>
-                {selected.description} {selected.variable_count} hourly variables
-                {selected.resolution ? `, ${selected.resolution}` : ""}, 24 hours, stored as Parquet.
-              </p>
-            )}
-          </div>
-
-          <div style={card}>
             <div style={sectionTitle}>Location</div>
             <div style={{ display: "flex", gap: 16, marginBottom: 12, fontSize: 13, color: "#334155" }}>
               <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
@@ -336,12 +334,40 @@ export default function DataFetchForm() {
                   <input type="number" step="0.1" value={west} onChange={(e) => setWest(e.target.value)} style={input} />
                 </div>
               </div>
+              {Number(north) > Number(south) && Number(east) > Number(west) ? (
+                <div style={{ marginTop: 12 }}>
+                  <AreaMap
+                    north={Number(north)}
+                    south={Number(south)}
+                    east={Number(east)}
+                    west={Number(west)}
+                  />
+                </div>
+              ) : (
+                <p style={{ margin: "10px 0 0", fontSize: 12, color: "#b45309" }}>
+                  North must be greater than south, and east must be greater than west, before the box can be drawn.
+                </p>
+              )}
               </>
-            ) : locationMode === "map" ? (
+            ) : (
               <>
                 <p style={{ margin: "0 0 12px", fontSize: 12, color: "#64748b", lineHeight: 1.5 }}>
-                  Choose a point on the map. The selected latitude and longitude are sent as a single cell.
+                  {locationMode === "map"
+                    ? "Choose a point on the map. The selected latitude and longitude are sent as a single cell."
+                    : "Enter a latitude and longitude. The map marks that point, and a click on the map fills the fields."}
                 </p>
+                {locationMode === "point" && (
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+                    <div style={label}>
+                      <span>Latitude</span>
+                      <input type="number" step="0.0001" value={latitude} onChange={(e) => setLatitude(e.target.value)} style={input} />
+                    </div>
+                    <div style={label}>
+                      <span>Longitude</span>
+                      <input type="number" step="0.0001" value={longitude} onChange={(e) => setLongitude(e.target.value)} style={input} />
+                    </div>
+                  </div>
+                )}
                 <PointMap
                   latitude={Number(latitude) || Number(DEFAULT_POINT.latitude)}
                   longitude={Number(longitude) || Number(DEFAULT_POINT.longitude)}
@@ -351,106 +377,108 @@ export default function DataFetchForm() {
                   }}
                 />
                 <p style={{ margin: "10px 0 0", fontSize: 12, color: "#334155" }}>
-                  Selected point: {latitude || "—"}, {longitude || "—"}. Click the map to move it. Use the + and − controls or the scroll wheel to zoom.
+                  Selected point: {latitude || DEFAULT_POINT.latitude}, {longitude || DEFAULT_POINT.longitude}.
                 </p>
               </>
-            ) : (
-              <>
-                <p style={{ margin: "0 0 12px", fontSize: 12, color: "#64748b", lineHeight: 1.5 }}>
-                  {selected?.name || "The dataset"} snaps this to the nearest {selected?.resolution === "0.25deg" ? "0.25" : "0.1"} degree cell. A stored box that already contains that cell is reused.
-                </p>
+            )}
+          </div>
+
+          <div style={card}>
+            <div className="dataset-head">
+              <div>
+                <div style={sectionTitle}>Dataset</div>
+                <div style={label}>
+                  <span>Dataset</span>
+                  <select value={datasetId} onChange={(e) => setDatasetId(e.target.value)} style={select}>
+                    {datasets.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div>
+                <div style={sectionTitle}>Time period</div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                   <div style={label}>
-                    <span>Latitude</span>
-                    <input type="number" step="0.0001" value={latitude} onChange={(e) => setLatitude(e.target.value)} style={input} />
+                    <span>Start</span>
+                    <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} style={input} />
                   </div>
                   <div style={label}>
-                    <span>Longitude</span>
-                    <input type="number" step="0.0001" value={longitude} onChange={(e) => setLongitude(e.target.value)} style={input} />
+                    <span>End</span>
+                    <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} style={input} />
                   </div>
                 </div>
-              </>
-            )}
-          </div>
-        </div>
-
-        <div style={{ ...card, marginTop: 16 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
-            <div style={sectionTitle}>Variables</div>
-            <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-              <button type="button" onClick={() => setSelectedVariables(variables.map((item) => item.name))} style={{ border: "1px solid #e2e8f0", background: "#fff", borderRadius: 6, padding: "4px 8px", cursor: "pointer" }}>
-                All
-              </button>
-              <button type="button" onClick={() => setSelectedVariables([])} style={{ border: "1px solid #e2e8f0", background: "#fff", borderRadius: 6, padding: "4px 8px", cursor: "pointer" }}>
-                Clear
-              </button>
-            </div>
-          </div>
-          <p style={{ margin: "0 0 10px", fontSize: 12, color: "#64748b" }}>
-            {selectedVariables.length} selected. A range longer than 31 days can include at most 5 variables.
-          </p>
-          <div className="variable-panel">
-            {variables.map((item) => (
-              <label key={item.name}>
-                <input
-                  type="checkbox"
-                  checked={selectedVariables.includes(item.name)}
-                  onChange={() => toggleVariable(item.name)}
-                />
-                <span>{item.label}{item.unit ? ` (${item.unit})` : ""}</span>
-              </label>
-            ))}
-          </div>
-        </div>
-
-        <div className="fetch-actions">
-          <div style={card}>
-            <div style={sectionTitle}>Time period</div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              <div style={label}>
-                <span>Start</span>
-                <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} style={input} />
-              </div>
-              <div style={label}>
-                <span>End</span>
-                <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} style={input} />
               </div>
             </div>
-          </div>
+            <div style={{ marginTop: 16 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+                <div style={sectionTitle}>Variables</div>
+                <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+                  <button type="button" onClick={() => setSelectedVariables(variables.map((item) => item.name))} style={{ border: "1px solid #e2e8f0", background: "#fff", borderRadius: 6, padding: "4px 8px", cursor: "pointer" }}>
+                    All
+                  </button>
+                  <button type="button" onClick={() => setSelectedVariables([])} style={{ border: "1px solid #e2e8f0", background: "#fff", borderRadius: 6, padding: "4px 8px", cursor: "pointer" }}>
+                    Clear
+                  </button>
+                </div>
+              </div>
+              <p style={{ margin: "0 0 8px", fontSize: 12, color: "#64748b" }}>
+                {selectedVariables.length} selected.
+              </p>
+              {variableMessage && (
+                <p style={{ margin: "0 0 10px", fontSize: 12, color: "#b45309" }}>{variableMessage}</p>
+              )}
+              <div className="variable-panel">
+                {variables.map((item) => (
+                  <label key={item.name}>
+                    <input
+                      type="checkbox"
+                      checked={selectedVariables.includes(item.name)}
+                      onChange={() => toggleVariable(item.name)}
+                    />
+                    <span>{item.label}{item.unit ? ` (${item.unit})` : ""}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
 
-          <div style={{ ...card, display: "flex", flexDirection: "column", justifyContent: "flex-end", gap: 12 }}>
-            <div style={sectionTitle}>Fetch</div>
-            {error && (
-              <div
+            <div style={{ marginTop: 20 }}>
+              <div style={sectionTitle}>Fetch</div>
+              {error && (
+                <div
+                  style={{
+                    padding: "12px 16px",
+                    background: "#fef2f2",
+                    border: "1px solid #fecaca",
+                    borderRadius: 8,
+                    fontSize: 13,
+                    color: "#dc2626",
+                    fontWeight: 500,
+                    marginBottom: 12,
+                  }}
+                >
+                  {error}
+                </div>
+              )}
+              <button
+                onClick={handleSubmit}
+                disabled={loading || !startDate || !endDate || selectedVariables.length === 0}
+                className="fetch-button"
                 style={{
-                  padding: "12px 16px",
-                  background: "#fef2f2",
-                  border: "1px solid #fecaca",
-                  borderRadius: 8,
-                  fontSize: 13,
-                  color: "#dc2626",
-                  fontWeight: 500,
+                  ...primaryBtn,
+                  opacity: loading || !startDate || !endDate || selectedVariables.length === 0 ? 0.6 : 1,
+                  cursor: loading || !startDate || !endDate || selectedVariables.length === 0 ? "not-allowed" : "pointer",
                 }}
               >
-                {error}
-              </div>
-            )}
-            <button
-              onClick={handleSubmit}
-              disabled={loading || !startDate || !endDate || selectedVariables.length === 0}
-              className="fetch-button"
-              style={{
-                ...primaryBtn,
-                opacity: loading || !startDate || !endDate || selectedVariables.length === 0 ? 0.6 : 1,
-                cursor: loading || !startDate || !endDate || selectedVariables.length === 0 ? "not-allowed" : "pointer",
-              }}
-            >
-              {loading
-                ? jobStatus === "running"
-                  ? "CDS running…"
-                  : "Fetching one day…"
-                : "Fetch hourly day"}
-            </button>
+                {loading
+                  ? jobStatus === "running"
+                    ? "CDS running…"
+                    : "Fetching one day…"
+                  : "Fetch hourly day"}
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -472,7 +500,7 @@ export default function DataFetchForm() {
           >
             <div style={{ fontWeight: 600, fontSize: 16, color: "#0f172a" }}>Ready to fetch</div>
             <div style={{ fontSize: 14, color: "#94a3b8", maxWidth: 320, textAlign: "center", lineHeight: 1.6 }}>
-              Choose the dataset, the area box, and one date, then fetch.
+              Choose a point on the map, the dataset, the dates, and the variables, then fetch.
             </div>
           </div>
         )}
