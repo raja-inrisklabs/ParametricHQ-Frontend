@@ -528,11 +528,11 @@ export default function DataFetchForm() {
                 )}
               </div>
               <div style={{ fontSize: 13, color: "#475569" }}>{errorText(result, "")}</div>
-              {result.record_count !== undefined && (
+              {result.record_count != null && (
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, marginTop: 16 }}>
                   <div style={statBox}>
                     <div style={{ fontSize: 11, color: "#94a3b8" }}>Records</div>
-                    <div style={{ fontSize: 20, fontWeight: 700 }}>{result.record_count.toLocaleString()}</div>
+                    <div style={{ fontSize: 20, fontWeight: 700 }}>{Number(result.record_count).toLocaleString()}</div>
                   </div>
                   <div style={statBox}>
                     <div style={{ fontSize: 11, color: "#94a3b8" }}>File</div>
