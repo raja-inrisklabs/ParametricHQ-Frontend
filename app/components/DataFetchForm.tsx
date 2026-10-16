@@ -50,6 +50,10 @@ function apiUrl(path: string): string {
   return `${API_BASE}${path}`;
 }
 
+function downloadHref(path: string): string {
+  return path.startsWith("http") ? path : `${API_BASE}${path}`;
+}
+
 const FALLBACK_DATASETS: CatalogDataset[] = [
   {
     id: "reanalysis-era5-land",
@@ -269,7 +273,8 @@ export default function DataFetchForm() {
   async function pollJob(jobId: string, initial: ApiResponse): Promise<ApiResponse> {
     let latest = initial;
     setJobStatus(initial.status || "accepted");
-    for (let i = 0; i < 180; i++) {
+    // A year of hourly data can stay queued at CDS for well over an hour.
+    for (let i = 0; i < 2400; i++) {
       await new Promise((r) => setTimeout(r, 3000));
       const res = await fetch(apiUrl(`/api/v1/datasets/jobs/${jobId}`));
       const body: ApiResponse = await res.json().catch(() => ({
@@ -510,8 +515,8 @@ export default function DataFetchForm() {
                 {loading
                   ? jobStatus === "running"
                     ? "CDS running…"
-                    : "Fetching one day…"
-                  : "Fetch hourly day"}
+                    : "Fetching…"
+                  : "Fetch hourly data"}
               </button>
             </div>
           </div>
@@ -601,7 +606,7 @@ export default function DataFetchForm() {
                   {result.data_key}
                 </code>
                 <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                  <a href={result.download_url} style={{ color: "#1d4ed8", fontWeight: 600, fontSize: 13 }}>
+                  <a href={downloadHref(result.download_url)} style={{ color: "#1d4ed8", fontWeight: 600, fontSize: 13 }}>
                     Download Parquet
                   </a>
                   <button

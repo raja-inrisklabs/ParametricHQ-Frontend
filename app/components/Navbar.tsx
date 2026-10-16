@@ -10,6 +10,7 @@ export default function Navbar() {
 
   const navLinks = [
     { href: "/", label: "Fetch", icon: "⌂" },
+    { href: "/stored", label: "Stored files", icon: "↓" },
   ];
 
   return (
