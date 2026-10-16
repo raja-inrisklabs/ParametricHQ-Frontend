@@ -42,8 +42,13 @@ const AreaMap = dynamic(() => import("./AreaMap"), {
   loading: () => <div className="map-placeholder">Loading street map…</div>,
 });
 
-const DEFAULT_AREA = { north: "20", west: "10", south: "10", east: "20" };
 const DEFAULT_POINT = { latitude: "23.0225", longitude: "72.5714" };
+
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
+function apiUrl(path: string): string {
+  return `${API_BASE}${path}`;
+}
 
 const FALLBACK_DATASETS: CatalogDataset[] = [
   {
@@ -73,10 +78,10 @@ export default function DataFetchForm() {
   const [endDate, setEndDate] = useState("2024-02-01");
   const [variables, setVariables] = useState<CatalogVariable[]>([]);
   const [selectedVariables, setSelectedVariables] = useState<string[]>([]);
-  const [north, setNorth] = useState(DEFAULT_AREA.north);
-  const [west, setWest] = useState(DEFAULT_AREA.west);
-  const [south, setSouth] = useState(DEFAULT_AREA.south);
-  const [east, setEast] = useState(DEFAULT_AREA.east);
+  const [north, setNorth] = useState("");
+  const [west, setWest] = useState("");
+  const [south, setSouth] = useState("");
+  const [east, setEast] = useState("");
   const [locationMode, setLocationMode] = useState<"area" | "point" | "map">("map");
   const [latitude, setLatitude] = useState(DEFAULT_POINT.latitude);
   const [longitude, setLongitude] = useState(DEFAULT_POINT.longitude);
@@ -91,7 +96,7 @@ export default function DataFetchForm() {
   const selected = datasets.find((item) => item.id === datasetId) ?? datasets[0];
 
   useEffect(() => {
-    fetch("/api/v1/datasets/catalog")
+    fetch(apiUrl("/api/v1/datasets/catalog"))
       .then((res) => (res.ok ? res.json() : Promise.reject()))
       .then((rows: CatalogDataset[]) => {
         if (rows.length > 0) {
@@ -105,7 +110,7 @@ export default function DataFetchForm() {
   useEffect(() => {
     let active = true;
     setVariableMessage("Loading variables…");
-    fetch(`/api/v1/datasets/catalog/${datasetId}/variables`)
+    fetch(apiUrl(`/api/v1/datasets/catalog/${datasetId}/variables`))
       .then((res) => (res.ok ? res.json() : Promise.reject(new Error(`Variables request failed (${res.status}).`))))
       .then((rows: CatalogVariable[]) => {
         if (!active) return;
@@ -117,12 +122,35 @@ export default function DataFetchForm() {
         if (!active) return;
         setVariables([]);
         setSelectedVariables([]);
-        setVariableMessage("Variables could not be loaded. Start the API on port 8000 and refresh.");
+        setVariableMessage("Variables could not be loaded from the API. Refresh the page.");
       });
     return () => {
       active = false;
     };
   }, [datasetId]);
+
+  function areaBounds(): [[number, number], [number, number]] | null {
+    if (![north, south, east, west].every((value) => value.trim() !== "")) return null;
+    const n = Number(north);
+    const s = Number(south);
+    const e = Number(east);
+    const w = Number(west);
+    if ([n, s, e, w].some((value) => Number.isNaN(value))) return null;
+    if (n <= s || w >= e) return null;
+    if (n > 90 || s < -90 || w < -180 || e > 180) return null;
+    return [
+      [s, w],
+      [n, e],
+    ];
+  }
+
+  function clearArea() {
+    setNorth("");
+    setSouth("");
+    setEast("");
+    setWest("");
+    setError(null);
+  }
 
   function locationError(): string | null {
     if (locationMode === "point" || locationMode === "map") {
@@ -132,6 +160,9 @@ export default function DataFetchForm() {
       if (lat < -90 || lat > 90) return "Latitude is -90 to 90.";
       if (lon < -180 || lon > 180) return "Longitude is -180 to 180.";
       return null;
+    }
+    if (![north, south, east, west].every((value) => value.trim() !== "")) {
+      return "Enter north, south, east, and west.";
     }
     const n = Number(north);
     const w = Number(west);
@@ -188,7 +219,7 @@ export default function DataFetchForm() {
     setPreview(null);
 
     try {
-      const res = await fetch("/api/v1/datasets/request", {
+      const res = await fetch(apiUrl("/api/v1/datasets/request"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -211,7 +242,7 @@ export default function DataFetchForm() {
       });
       const body: ApiResponse = await res.json().catch(() => ({ status: "failed", detail: res.statusText }));
       if (!res.ok && res.status !== 202) {
-        setError(errorText(body, `Request failed (${res.status}). Is the API running on port 8000?`));
+        setError(errorText(body, `Request failed (${res.status}).`));
         setResult(body);
         return;
       }
@@ -240,7 +271,7 @@ export default function DataFetchForm() {
     setJobStatus(initial.status || "accepted");
     for (let i = 0; i < 180; i++) {
       await new Promise((r) => setTimeout(r, 3000));
-      const res = await fetch(`/api/v1/datasets/jobs/${jobId}`);
+      const res = await fetch(apiUrl(`/api/v1/datasets/jobs/${jobId}`));
       const body: ApiResponse = await res.json().catch(() => ({
         status: "running",
         job_id: jobId,
@@ -264,7 +295,7 @@ export default function DataFetchForm() {
   async function loadPreview(dataKey: string) {
     setPreviewLoading(true);
     try {
-      const res = await fetch(`/api/v1/datasets/${dataKey}/data?limit=8`);
+      const res = await fetch(apiUrl(`/api/v1/datasets/${dataKey}/data?limit=8`));
       const body = await res.json();
       setPreview(body.sample_records || []);
     } catch {
@@ -311,11 +342,21 @@ export default function DataFetchForm() {
             </div>
             {locationMode === "area" ? (
               <>
-              <p style={{ margin: "0 0 10px", fontSize: 12, color: "#64748b" }}>
-                {Number.isNaN(Number(north) - Number(south)) || Number.isNaN(Number(east) - Number(west))
-                  ? "Enter north, south, east, and west."
-                  : `Box: ${(Number(north) - Number(south)).toFixed(1)}° north–south by ${(Number(east) - Number(west)).toFixed(1)}° east–west.`}
-              </p>
+              <div className="area-toolbar">
+                <p>
+                  {areaBounds()
+                    ? `Box: ${(Number(north) - Number(south)).toFixed(1)}° north–south by ${(Number(east) - Number(west)).toFixed(1)}° east–west.`
+                    : "No area selected. Enter north, south, east, and west."}
+                </p>
+                <button
+                  type="button"
+                  onClick={clearArea}
+                  disabled={!north && !south && !east && !west}
+                  className="ghost-btn"
+                >
+                  Clear
+                </button>
+              </div>
               <div className="area-row">
                 <div style={label}>
                   <span>North</span>
@@ -334,18 +375,12 @@ export default function DataFetchForm() {
                   <input type="number" step="0.1" value={west} onChange={(e) => setWest(e.target.value)} style={input} />
                 </div>
               </div>
-              {Number(north) > Number(south) && Number(east) > Number(west) ? (
-                <div style={{ marginTop: 12 }}>
-                  <AreaMap
-                    north={Number(north)}
-                    south={Number(south)}
-                    east={Number(east)}
-                    west={Number(west)}
-                  />
-                </div>
-              ) : (
+              <div style={{ marginTop: 12 }}>
+                <AreaMap bounds={areaBounds()} />
+              </div>
+              {north.trim() && south.trim() && east.trim() && west.trim() && !areaBounds() && (
                 <p style={{ margin: "10px 0 0", fontSize: 12, color: "#b45309" }}>
-                  North must be greater than south, and east must be greater than west, before the box can be drawn.
+                  North must be greater than south, and east must be greater than west.
                 </p>
               )}
               </>

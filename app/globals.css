@@ -56,6 +56,36 @@
   height: 44px;
 }
 
+.area-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.area-toolbar p {
+  margin: 0;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.ghost-btn {
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  border-radius: 6px;
+  padding: 4px 8px;
+  cursor: pointer;
+  font-size: 12px;
+  color: #334155;
+  font-family: inherit;
+}
+
+.ghost-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .area-row {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
