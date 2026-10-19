@@ -211,6 +211,11 @@ export default function DataFetchForm() {
       setError("Select at least one variable.");
       return;
     }
+    const dayCount = Math.round((Date.parse(endDate) - Date.parse(startDate)) / 86400000) + 1;
+    if (dayCount > 31 && selectedVariables.length > 5) {
+      setError("A range longer than one month can include at most 5 variables.");
+      return;
+    }
     const boundsError = locationError();
     if (boundsError) {
       setError(boundsError);
@@ -465,7 +470,7 @@ export default function DataFetchForm() {
                 </div>
               </div>
               <p style={{ margin: "0 0 8px", fontSize: 12, color: "#64748b" }}>
-                {selectedVariables.length} selected.
+                {selectedVariables.length} selected. A range longer than one month can include at most 5.
               </p>
               {variableMessage && (
                 <p style={{ margin: "0 0 10px", fontSize: 12, color: "#b45309" }}>{variableMessage}</p>
