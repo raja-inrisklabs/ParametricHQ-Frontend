@@ -96,6 +96,7 @@ export default function DataFetchForm() {
   const [preview, setPreview] = useState<Record<string, unknown>[] | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [variableMessage, setVariableMessage] = useState<string | null>(null);
+  const [limitNotice, setLimitNotice] = useState<string | null>(null);
 
   const selected = datasets.find((item) => item.id === datasetId) ?? datasets[0];
 
@@ -192,10 +193,32 @@ export default function DataFetchForm() {
     return fallback;
   }
 
+  const dayCount = startDate && endDate
+    ? Math.round((Date.parse(endDate) - Date.parse(startDate)) / 86400000) + 1
+    : 0;
+  const longRange = dayCount > 31;
+  const variableLimitMessage = "A range longer than 31 days can include at most 5 variables.";
+  const overVariableLimit = longRange && selectedVariables.length > 5;
+
   function toggleVariable(name: string) {
-    setSelectedVariables((current) =>
-      current.includes(name) ? current.filter((item) => item !== name) : [...current, name]
-    );
+    setSelectedVariables((current) => {
+      if (current.includes(name)) return current.filter((item) => item !== name);
+      if (longRange && current.length >= 5) {
+        setLimitNotice(variableLimitMessage);
+        return current;
+      }
+      return [...current, name];
+    });
+  }
+
+  function selectAllVariables() {
+    const names = variables.map((item) => item.name);
+    if (longRange && names.length > 5) {
+      setSelectedVariables(names.slice(0, 5));
+      setLimitNotice(variableLimitMessage);
+      return;
+    }
+    setSelectedVariables(names);
   }
 
   async function handleSubmit() {
@@ -211,9 +234,8 @@ export default function DataFetchForm() {
       setError("Select at least one variable.");
       return;
     }
-    const dayCount = Math.round((Date.parse(endDate) - Date.parse(startDate)) / 86400000) + 1;
-    if (dayCount > 31 && selectedVariables.length > 5) {
-      setError("A range longer than one month can include at most 5 variables.");
+    if (overVariableLimit) {
+      setError(variableLimitMessage);
       return;
     }
     const boundsError = locationError();
@@ -461,7 +483,7 @@ export default function DataFetchForm() {
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
                 <div style={sectionTitle}>Variables</div>
                 <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-                  <button type="button" onClick={() => setSelectedVariables(variables.map((item) => item.name))} style={{ border: "1px solid #e2e8f0", background: "#fff", borderRadius: 6, padding: "4px 8px", cursor: "pointer" }}>
+                  <button type="button" onClick={selectAllVariables} style={{ border: "1px solid #e2e8f0", background: "#fff", borderRadius: 6, padding: "4px 8px", cursor: "pointer" }}>
                     All
                   </button>
                   <button type="button" onClick={() => setSelectedVariables([])} style={{ border: "1px solid #e2e8f0", background: "#fff", borderRadius: 6, padding: "4px 8px", cursor: "pointer" }}>
@@ -469,9 +491,17 @@ export default function DataFetchForm() {
                   </button>
                 </div>
               </div>
-              <p style={{ margin: "0 0 8px", fontSize: 12, color: "#64748b" }}>
-                {selectedVariables.length} selected. A range longer than one month can include at most 5.
+              <p style={{ margin: "0 0 8px", fontSize: 12, color: overVariableLimit ? "#b45309" : "#64748b" }}>
+                {selectedVariables.length} selected.
               </p>
+              {limitNotice && (
+                <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "0 0 10px", padding: "6px 8px", background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 6, fontSize: 12, color: "#b45309" }}>
+                  <span style={{ flex: 1 }}>{limitNotice}</span>
+                  <button type="button" aria-label="Dismiss" onClick={() => setLimitNotice(null)} style={{ border: "none", background: "transparent", color: "#92400e", cursor: "pointer", fontSize: 14, lineHeight: 1, padding: 0 }}>
+                    ×
+                  </button>
+                </div>
+              )}
               {variableMessage && (
                 <p style={{ margin: "0 0 10px", fontSize: 12, color: "#b45309" }}>{variableMessage}</p>
               )}
@@ -509,12 +539,12 @@ export default function DataFetchForm() {
               )}
               <button
                 onClick={handleSubmit}
-                disabled={loading || !startDate || !endDate || selectedVariables.length === 0}
+                disabled={loading || !startDate || !endDate || selectedVariables.length === 0 || overVariableLimit}
                 className="fetch-button"
                 style={{
                   ...primaryBtn,
-                  opacity: loading || !startDate || !endDate || selectedVariables.length === 0 ? 0.6 : 1,
-                  cursor: loading || !startDate || !endDate || selectedVariables.length === 0 ? "not-allowed" : "pointer",
+                  opacity: loading || !startDate || !endDate || selectedVariables.length === 0 || overVariableLimit ? 0.6 : 1,
+                  cursor: loading || !startDate || !endDate || selectedVariables.length === 0 || overVariableLimit ? "not-allowed" : "pointer",
                 }}
               >
                 {loading
@@ -574,16 +604,10 @@ export default function DataFetchForm() {
               </div>
               <div style={{ fontSize: 13, color: "#475569" }}>{errorText(result, "")}</div>
               {result.record_count != null && (
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, marginTop: 16 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 10, marginTop: 16 }}>
                   <div style={statBox}>
                     <div style={{ fontSize: 11, color: "#94a3b8" }}>Records</div>
                     <div style={{ fontSize: 20, fontWeight: 700 }}>{Number(result.record_count).toLocaleString()}</div>
-                  </div>
-                  <div style={statBox}>
-                    <div style={{ fontSize: 11, color: "#94a3b8" }}>File</div>
-                    <div style={{ fontSize: 20, fontWeight: 700 }}>
-                      {((result.file_size_bytes || 0) / 1024).toFixed(1)} KB
-                    </div>
                   </div>
                   <div style={statBox}>
                     <div style={{ fontSize: 11, color: "#94a3b8" }}>Variables</div>
