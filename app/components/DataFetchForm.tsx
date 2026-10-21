@@ -58,6 +58,7 @@ function SeasonRange({
   onMonthCount,
   onStartYear,
   onEndYear,
+  notice,
 }: {
   startMonth: string;
   monthCount: string;
@@ -67,10 +68,8 @@ function SeasonRange({
   onMonthCount: (value: string) => void;
   onStartYear: (value: string) => void;
   onEndYear: (value: string) => void;
+  notice: string;
 }) {
-  const years = Number(endYear) >= Number(startYear)
-    ? Number(endYear) - Number(startYear) + 1
-    : 0;
   return (
     <div>
       <div className="season-row">
@@ -99,10 +98,8 @@ function SeasonRange({
           <input type="number" min={1950} max={2100} value={endYear} onChange={(e) => onEndYear(e.target.value)} style={input} />
         </div>
       </div>
-      {years <= 0 && (
-        <p style={{ margin: "10px 0 0", fontSize: 12, color: "#b45309" }}>
-          End year must be the same as or after the start year.
-        </p>
+      {notice && (
+        <p style={{ margin: "10px 0 0", fontSize: 12, color: "#b45309" }}>{notice}</p>
       )}
     </div>
   );
@@ -248,6 +245,9 @@ export default function DataFetchForm() {
     if (n <= s) return "North must be greater than south.";
     if (w >= e) return "West must be less than east.";
     if (n > 90 || s < -90 || w < -180 || e > 180) return "Latitude is -90 to 90. Longitude is -180 to 180.";
+    if (datasetId === "reanalysis-era5-land" && ((n - s) > 1 || (e - w) > 1)) {
+      return "ERA5-Land area is limited to 1° by 1°. Reduce the area.";
+    }
     return null;
   }
 
@@ -265,14 +265,28 @@ export default function DataFetchForm() {
   const dayCount = startDate && endDate
     ? Math.round((Date.parse(endDate) - Date.parse(startDate)) / 86400000) + 1
     : 0;
-  const longRange = dayCount > 31;
-  const variableLimitMessage = "A range longer than 31 days can include at most 5 variables.";
-  const overVariableLimit = longRange && selectedVariables.length > 5;
+  const seasonYears = Number(endYear) >= Number(startYear) ? Number(endYear) - Number(startYear) + 1 : 0;
+  const seasonCalls = periodMode === "season" ? seasonYears * Number(monthCount) : 0;
+  const seasonTooLarge = periodMode === "season" && (seasonCalls > 12 || seasonCalls <= 0 || Number(startMonth) + Number(monthCount) - 1 > 12);
+  const longRange = periodMode === "dates" && dayCount > 31;
+  const variableLimitMessage = periodMode === "season"
+    ? "A month range can include at most 5 variables."
+    : "A range longer than 31 days can include at most 5 variables.";
+  const overVariableLimit = (longRange || periodMode === "season") && selectedVariables.length > 5;
+  const areaTooLarge = locationMode === "area" && locationError() === "ERA5-Land area is limited to 1° by 1°. Reduce the area.";
+  const fetchBlocked = loading || selectedVariables.length === 0 || overVariableLimit || seasonTooLarge || areaTooLarge || (periodMode === "dates" && (!startDate || !endDate));
+  const seasonLimitMessage = seasonCalls > 12
+    ? `This selection is ${seasonCalls} monthly calls. One request can fetch 12 months.`
+    : Number(startMonth) + Number(monthCount) - 1 > 12
+      ? "The month range must stay inside the selected year."
+      : seasonYears <= 0
+        ? "End year must be the same as or after the start year."
+        : "";
 
   function toggleVariable(name: string) {
     setSelectedVariables((current) => {
       if (current.includes(name)) return current.filter((item) => item !== name);
-      if (longRange && current.length >= 5) {
+      if ((longRange || periodMode === "season") && current.length >= 5) {
         setLimitNotice(variableLimitMessage);
         return current;
       }
@@ -282,7 +296,7 @@ export default function DataFetchForm() {
 
   function selectAllVariables() {
     const names = variables.map((item) => item.name);
-    if (longRange && names.length > 5) {
+    if ((longRange || periodMode === "season") && names.length > 5) {
       setSelectedVariables(names.slice(0, 5));
       setLimitNotice(variableLimitMessage);
       return;
@@ -291,12 +305,16 @@ export default function DataFetchForm() {
   }
 
   async function handleSubmit() {
-    if (!startDate || !endDate) {
+    if (periodMode === "dates" && (!startDate || !endDate)) {
       setError("Select a start date and an end date.");
       return;
     }
-    if (endDate < startDate) {
+    if (periodMode === "dates" && endDate < startDate) {
       setError("End date must be on or after the start date.");
+      return;
+    }
+    if (periodMode === "season" && seasonTooLarge) {
+      setError(seasonLimitMessage);
       return;
     }
     if (selectedVariables.length === 0) {
@@ -326,8 +344,15 @@ export default function DataFetchForm() {
           provider_id: selected?.provider_id || "era5",
           dataset_id: datasetId,
           location: locationMode === "area" ? `n${north}_w${west}_s${south}_e${east}` : `${latitude},${longitude}`,
-          start_date: startDate,
-          end_date: endDate,
+          ...(periodMode === "season"
+            ? {
+                period_type: "season",
+                start_month: Number(startMonth),
+                month_count: Number(monthCount),
+                start_year: Number(startYear),
+                end_year: Number(endYear),
+              }
+            : { start_date: startDate, end_date: endDate }),
           parameters: selectedVariables,
           temporal_resolution: "hourly",
           ...(locationMode === "area"
@@ -479,9 +504,9 @@ export default function DataFetchForm() {
               <div className="map-slot">
                 <AreaMap bounds={areaBounds()} />
               </div>
-              {north.trim() && south.trim() && east.trim() && west.trim() && !areaBounds() && (
+              {locationError() && north.trim() && south.trim() && east.trim() && west.trim() && (
                 <p style={{ margin: "10px 0 0", fontSize: 12, color: "#b45309" }}>
-                  North must be greater than south, and east must be greater than west.
+                  {locationError()}
                 </p>
               )}
               </>
@@ -579,6 +604,7 @@ export default function DataFetchForm() {
                     onMonthCount={setMonthCount}
                     onStartYear={setStartYear}
                     onEndYear={setEndYear}
+                    notice={seasonLimitMessage}
                   />
                 )}
               </div>
@@ -643,12 +669,12 @@ export default function DataFetchForm() {
               )}
               <button
                 onClick={handleSubmit}
-                disabled={loading || !startDate || !endDate || selectedVariables.length === 0 || overVariableLimit}
+                disabled={fetchBlocked}
                 className="fetch-button"
                 style={{
                   ...primaryBtn,
-                  opacity: loading || !startDate || !endDate || selectedVariables.length === 0 || overVariableLimit ? 0.6 : 1,
-                  cursor: loading || !startDate || !endDate || selectedVariables.length === 0 || overVariableLimit ? "not-allowed" : "pointer",
+                  opacity: fetchBlocked ? 0.6 : 1,
+                  cursor: fetchBlocked ? "not-allowed" : "pointer",
                 }}
               >
                 {loading
@@ -690,7 +716,7 @@ export default function DataFetchForm() {
               {jobStatus === "running" ? "CDS request is running" : "Request accepted"}
             </div>
             <div style={{ fontSize: 13, color: "#64748b" }}>
-              {selected?.name} · {startDate} to {endDate} · {selectedVariables.length} variables
+              {selected?.name} · {periodMode === "season" ? `${seasonCalls} months` : `${startDate} to ${endDate}`} · {selectedVariables.length} variables
             </div>
           </div>
         )}
