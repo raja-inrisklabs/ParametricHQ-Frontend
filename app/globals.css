@@ -86,14 +86,29 @@
   cursor: not-allowed;
 }
 
-.area-row {
+.area-row,
+.season-row {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 8px;
 }
 
+.map-slot {
+  flex: 1;
+  display: flex;
+  min-height: 220px;
+  margin-top: 12px;
+}
+
+.map-slot .leaflet-container {
+  flex: 1;
+  height: auto;
+  min-height: 220px;
+}
+
 .point-map {
-  height: 320px;
+  height: 100%;
+  min-height: 220px;
   width: 100%;
   border-radius: 8px;
   border: 1px solid #e2e8f0;
@@ -142,7 +157,8 @@
     grid-template-columns: 1fr;
   }
 
-  .area-row {
+  .area-row,
+  .season-row {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }

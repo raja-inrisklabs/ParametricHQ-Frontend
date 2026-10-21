@@ -44,6 +44,70 @@ const AreaMap = dynamic(() => import("./AreaMap"), {
 
 const DEFAULT_POINT = { latitude: "23.0225", longitude: "72.5714" };
 
+const MONTHS = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
+
+function SeasonRange({
+  startMonth,
+  monthCount,
+  startYear,
+  endYear,
+  onStartMonth,
+  onMonthCount,
+  onStartYear,
+  onEndYear,
+}: {
+  startMonth: string;
+  monthCount: string;
+  startYear: string;
+  endYear: string;
+  onStartMonth: (value: string) => void;
+  onMonthCount: (value: string) => void;
+  onStartYear: (value: string) => void;
+  onEndYear: (value: string) => void;
+}) {
+  const years = Number(endYear) >= Number(startYear)
+    ? Number(endYear) - Number(startYear) + 1
+    : 0;
+  return (
+    <div>
+      <div className="season-row">
+        <div style={label}>
+          <span>Start month</span>
+          <select value={startMonth} onChange={(e) => onStartMonth(e.target.value)} style={select}>
+            {MONTHS.map((name, index) => (
+              <option key={name} value={String(index + 1)}>{name}</option>
+            ))}
+          </select>
+        </div>
+        <div style={label}>
+          <span>Month range</span>
+          <select value={monthCount} onChange={(e) => onMonthCount(e.target.value)} style={select}>
+            <option value="1">1 month</option>
+            <option value="2">2 months</option>
+            <option value="3">3 months</option>
+          </select>
+        </div>
+        <div style={label}>
+          <span>Start year</span>
+          <input type="number" min={1950} max={2100} value={startYear} onChange={(e) => onStartYear(e.target.value)} style={input} />
+        </div>
+        <div style={label}>
+          <span>End year</span>
+          <input type="number" min={1950} max={2100} value={endYear} onChange={(e) => onEndYear(e.target.value)} style={input} />
+        </div>
+      </div>
+      {years <= 0 && (
+        <p style={{ margin: "10px 0 0", fontSize: 12, color: "#b45309" }}>
+          End year must be the same as or after the start year.
+        </p>
+      )}
+    </div>
+  );
+}
+
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 function apiUrl(path: string): string {
@@ -80,6 +144,11 @@ export default function DataFetchForm() {
   const [datasetId, setDatasetId] = useState(FALLBACK_DATASETS[0].id);
   const [startDate, setStartDate] = useState("2024-02-01");
   const [endDate, setEndDate] = useState("2024-02-01");
+  const [periodMode, setPeriodMode] = useState<"dates" | "season">("dates");
+  const [startMonth, setStartMonth] = useState("6");
+  const [monthCount, setMonthCount] = useState("2");
+  const [startYear, setStartYear] = useState("2018");
+  const [endYear, setEndYear] = useState("2020");
   const [variables, setVariables] = useState<CatalogVariable[]>([]);
   const [selectedVariables, setSelectedVariables] = useState<string[]>([]);
   const [north, setNorth] = useState("");
@@ -341,7 +410,7 @@ export default function DataFetchForm() {
     <div className="fetch-layout">
       <div>
         <div className="fetch-top">
-          <div style={card}>
+          <div style={{ ...card, display: "flex", flexDirection: "column" }}>
             <div style={sectionTitle}>Location</div>
             <div style={{ display: "flex", gap: 16, marginBottom: 12, fontSize: 13, color: "#334155" }}>
               <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
@@ -407,7 +476,7 @@ export default function DataFetchForm() {
                   <input type="number" step="0.1" value={west} onChange={(e) => setWest(e.target.value)} style={input} />
                 </div>
               </div>
-              <div style={{ marginTop: 12 }}>
+              <div className="map-slot">
                 <AreaMap bounds={areaBounds()} />
               </div>
               {north.trim() && south.trim() && east.trim() && west.trim() && !areaBounds() && (
@@ -417,7 +486,7 @@ export default function DataFetchForm() {
               )}
               </>
             ) : (
-              <>
+              <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
                 <p style={{ margin: "0 0 12px", fontSize: 12, color: "#64748b", lineHeight: 1.5 }}>
                   {locationMode === "map"
                     ? "Choose a point on the map. The selected latitude and longitude are sent as a single cell."
@@ -435,48 +504,83 @@ export default function DataFetchForm() {
                     </div>
                   </div>
                 )}
-                <PointMap
-                  latitude={Number(latitude) || Number(DEFAULT_POINT.latitude)}
-                  longitude={Number(longitude) || Number(DEFAULT_POINT.longitude)}
-                  onSelect={(lat, lon) => {
-                    setLatitude(lat.toFixed(4));
-                    setLongitude(lon.toFixed(4));
-                  }}
-                />
+                <div className="map-slot">
+                  <PointMap
+                    latitude={Number(latitude) || Number(DEFAULT_POINT.latitude)}
+                    longitude={Number(longitude) || Number(DEFAULT_POINT.longitude)}
+                    onSelect={(lat, lon) => {
+                      setLatitude(lat.toFixed(4));
+                      setLongitude(lon.toFixed(4));
+                    }}
+                  />
+                </div>
                 <p style={{ margin: "10px 0 0", fontSize: 12, color: "#334155" }}>
                   Selected point: {latitude || DEFAULT_POINT.latitude}, {longitude || DEFAULT_POINT.longitude}.
                 </p>
-              </>
+              </div>
             )}
           </div>
 
           <div style={card}>
-            <div className="dataset-head">
-              <div>
-                <div style={sectionTitle}>Dataset</div>
-                <div style={label}>
-                  <span>Dataset</span>
-                  <select value={datasetId} onChange={(e) => setDatasetId(e.target.value)} style={select}>
-                    {datasets.map((item) => (
-                      <option key={item.id} value={item.id}>
-                        {item.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+            <div>
+              <div style={sectionTitle}>Dataset</div>
+              <div style={label}>
+                <span>Dataset</span>
+                <select value={datasetId} onChange={(e) => setDatasetId(e.target.value)} style={select}>
+                  {datasets.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.name}
+                    </option>
+                  ))}
+                </select>
               </div>
+            </div>
+            <div style={{ marginTop: 16 }}>
               <div>
                 <div style={sectionTitle}>Time period</div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                  <div style={label}>
-                    <span>Start</span>
-                    <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} style={input} />
-                  </div>
-                  <div style={label}>
-                    <span>End</span>
-                    <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} style={input} />
-                  </div>
+                <div style={{ display: "flex", gap: 16, marginBottom: 12, fontSize: 13, color: "#334155", flexWrap: "nowrap" }}>
+                  <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
+                    <input
+                      type="radio"
+                      name="period-mode"
+                      checked={periodMode === "dates"}
+                      onChange={() => setPeriodMode("dates")}
+                    />
+                    Date range
+                  </label>
+                  <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
+                    <input
+                      type="radio"
+                      name="period-mode"
+                      checked={periodMode === "season"}
+                      onChange={() => setPeriodMode("season")}
+                    />
+                    Month range across years
+                  </label>
                 </div>
+                {periodMode === "dates" ? (
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                    <div style={label}>
+                      <span>Start</span>
+                      <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} style={input} />
+                    </div>
+                    <div style={label}>
+                      <span>End</span>
+                      <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} style={input} />
+                    </div>
+                  </div>
+                ) : (
+                  <SeasonRange
+                    startMonth={startMonth}
+                    monthCount={monthCount}
+                    startYear={startYear}
+                    endYear={endYear}
+                    onStartMonth={setStartMonth}
+                    onMonthCount={setMonthCount}
+                    onStartYear={setStartYear}
+                    onEndYear={setEndYear}
+                  />
+                )}
               </div>
             </div>
             <div style={{ marginTop: 16 }}>
