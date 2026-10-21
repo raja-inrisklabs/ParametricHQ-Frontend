@@ -163,6 +163,7 @@ export default function DataFetchForm() {
   const [previewLoading, setPreviewLoading] = useState(false);
   const [variableMessage, setVariableMessage] = useState<string | null>(null);
   const [limitNotice, setLimitNotice] = useState<string | null>(null);
+  const [yearNotice, setYearNotice] = useState<string | null>(null);
 
   const selected = datasets.find((item) => item.id === datasetId) ?? datasets[0];
 
@@ -245,7 +246,7 @@ export default function DataFetchForm() {
     if (n <= s) return "North must be greater than south.";
     if (w >= e) return "West must be less than east.";
     if (n > 90 || s < -90 || w < -180 || e > 180) return "Latitude is -90 to 90. Longitude is -180 to 180.";
-    if (datasetId === "reanalysis-era5-land" && ((n - s) > 1 || (e - w) > 1)) {
+    if (datasetId === "reanalysis-era5-land" && (Math.round((n - s) * 10000) > 10000 || Math.round((e - w) * 10000) > 10000)) {
       return "ERA5-Land area is limited to 1° by 1°. Reduce the area.";
     }
     return null;
@@ -265,23 +266,37 @@ export default function DataFetchForm() {
   const dayCount = startDate && endDate
     ? Math.round((Date.parse(endDate) - Date.parse(startDate)) / 86400000) + 1
     : 0;
+  const yearlyDataset = datasetId === "reanalysis-era5-single-levels";
+  const dateYears = startDate && endDate
+    ? Number(endDate.slice(0, 4)) - Number(startDate.slice(0, 4)) + 1
+    : 0;
   const seasonYears = Number(endYear) >= Number(startYear) ? Number(endYear) - Number(startYear) + 1 : 0;
-  const seasonCalls = periodMode === "season" ? seasonYears * Number(monthCount) : 0;
-  const seasonTooLarge = periodMode === "season" && (seasonCalls > 12 || seasonCalls <= 0 || Number(startMonth) + Number(monthCount) - 1 > 12);
-  const longRange = periodMode === "dates" && dayCount > 31;
+  const seasonCalls = periodMode === "season" ? (yearlyDataset ? seasonYears : seasonYears * Number(monthCount)) : 0;
+  const yearsTooMany = yearlyDataset && ((periodMode === "dates" && dateYears > 10) || (periodMode === "season" && seasonYears > 10));
+  const seasonTooLarge = periodMode === "season" && (
+    yearsTooMany || seasonYears <= 0 || Number(startMonth) + Number(monthCount) - 1 > 12
+    || (!yearlyDataset && seasonCalls > 12)
+  );
+  const dateTooLong = periodMode === "dates" && (yearlyDataset ? yearsTooMany : dayCount > 366);
+  const longRange = periodMode === "dates" && (yearlyDataset ? dayCount > 31 : dayCount > 31);
   const variableLimitMessage = periodMode === "season"
     ? "A month range can include at most 5 variables."
     : "A range longer than 31 days can include at most 5 variables.";
   const overVariableLimit = (longRange || periodMode === "season") && selectedVariables.length > 5;
   const areaTooLarge = locationMode === "area" && locationError() === "ERA5-Land area is limited to 1° by 1°. Reduce the area.";
-  const fetchBlocked = loading || selectedVariables.length === 0 || overVariableLimit || seasonTooLarge || areaTooLarge || (periodMode === "dates" && (!startDate || !endDate));
-  const seasonLimitMessage = seasonCalls > 12
+  const fetchBlocked = loading || selectedVariables.length === 0 || overVariableLimit || seasonTooLarge || areaTooLarge || dateTooLong || (periodMode === "dates" && (!startDate || !endDate));
+  const yearLimitMessage = "ERA5 single levels can include at most 10 years.";
+  const seasonLimitMessage = !yearlyDataset && seasonCalls > 12
     ? `This selection is ${seasonCalls} monthly calls. One request can fetch 12 months.`
     : Number(startMonth) + Number(monthCount) - 1 > 12
       ? "The month range must stay inside the selected year."
       : seasonYears <= 0
         ? "End year must be the same as or after the start year."
         : "";
+
+  useEffect(() => {
+    if (yearsTooMany) setYearNotice(yearLimitMessage);
+  }, [yearsTooMany]);
 
   function toggleVariable(name: string) {
     setSelectedVariables((current) => {
@@ -311,6 +326,10 @@ export default function DataFetchForm() {
     }
     if (periodMode === "dates" && endDate < startDate) {
       setError("End date must be on or after the start date.");
+      return;
+    }
+    if (dateTooLong) {
+      setError(yearlyDataset ? yearLimitMessage : "Date range is limited to 366 days.");
       return;
     }
     if (periodMode === "season" && seasonTooLarge) {
@@ -606,6 +625,14 @@ export default function DataFetchForm() {
                     onEndYear={setEndYear}
                     notice={seasonLimitMessage}
                   />
+                )}
+                {yearNotice && (
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10, padding: "6px 8px", background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 6, fontSize: 12, color: "#b45309" }}>
+                    <span style={{ flex: 1 }}>{yearNotice}</span>
+                    <button type="button" aria-label="Dismiss year limit" onClick={() => setYearNotice(null)} style={{ border: "none", background: "transparent", color: "#92400e", cursor: "pointer", fontSize: 14, lineHeight: 1, padding: 0 }}>
+                      ×
+                    </button>
+                  </div>
                 )}
               </div>
             </div>
